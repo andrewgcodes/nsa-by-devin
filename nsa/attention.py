@@ -49,16 +49,17 @@ class NSAAttention(nn.Module):
         k = k.transpose(1, 2)
         v = v.transpose(1, 2)
 
-        # Compute gates
-        gates = self.gate_net(hidden_states)  # (B, L, 3)
-        gates = F.softmax(gates, dim=-1)
+        # Compute gates following paper's formulation:
+        # o*ₜ = Σ_{c∈{cmp,slc,win}} gᶜₜ · Attn(qₜ, K̃ᶜₜ, Ṽᶜₜ)
+        # where gᶜₜ ∈ [0,1] via sigmoid activation
+        gates = F.sigmoid(self.gate_net(hidden_states))  # (B, L, 3)
 
-        # 1. Compressed attention (𝐾˜cmp𝑡 = 𝑓cmp𝐾(k:𝑡))
+        # 1. Compressed attention (K̃ᶜᵐᵖₜ = φ(k_{i:i+l}))
         compressed_k = self.compressor(k)
         compressed_v = self.compressor(v)
         compressed_out = nsa_forward(q, compressed_k, compressed_v)
 
-        # 2. Selected attention (pslc𝑡[𝑗] computation)
+        # 2. Selected attention (pᶜᵐᵖₜ = Softmax(qₜᵀK̃ᶜᵐᵖₜ))
         importance_scores = self.selector.compute_importance_scores(
             q, compressed_k
         )
@@ -67,15 +68,17 @@ class NSAAttention(nn.Module):
         )
         selected_out = nsa_forward(q, selected_k, selected_v)
 
-        # 3. Sliding window attention
+        # 3. Sliding window attention (K̃ʷⁱⁿₜ = k_{t-w:t})
         sliding_out = self.sliding(q, k, v)
 
-        # Combine outputs using gates (o∗𝑡 = ∑︁𝑐∈C 𝑔𝑐𝑡 · Attn(q𝑡, 𝐾˜𝑐𝑡, 𝑉˜𝑐𝑡))
+        # Apply gated combination
         gates = gates.unsqueeze(1)  # (B, 1, L, 3)
+        
+        # Combine outputs with gated weighting
         out = (
-            gates[..., 0:1] * compressed_out +
-            gates[..., 1:2] * selected_out +
-            gates[..., 2:3] * sliding_out
+            gates[..., 0:1] * compressed_out +  # gᶜᵐᵖₜ · Attn(qₜ, K̃ᶜᵐᵖₜ, Ṽᶜᵐᵖₜ)
+            gates[..., 1:2] * selected_out +    # gˢˡᶜₜ · Attn(qₜ, K̃ˢˡᶜₜ, Ṽˢˡᶜₜ)
+            gates[..., 2:3] * sliding_out       # gʷⁱⁿₜ · Attn(qₜ, K̃ʷⁱⁿₜ, Ṽʷⁱⁿₜ)
         )
 
         # Project output
