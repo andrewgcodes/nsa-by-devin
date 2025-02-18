@@ -17,14 +17,26 @@ class BlockwiseSelector(nn.Module):
         query: torch.Tensor,          # (B, H, L, D)
         compressed_keys: torch.Tensor  # (B, H, N, D)
     ) -> torch.Tensor:
-        """Compute block importance scores using compressed attention."""
-        # Compute attention scores for the last position
+        """Compute block importance scores using compressed attention.
+        
+        Following the paper's formulation:
+        pᶜᵐᵖₜ = Softmax(qₜᵀK̃ᶜᵐᵖₜ)
+        
+        Args:
+            query: Query tensor (B, H, L, D)
+            compressed_keys: Compressed key tensor (B, H, N, D)
+        Returns:
+            Block importance scores (B, H, N)
+        """
+        # Use last query position qₜ
         q = query[:, :, -1:, :]  # (B, H, 1, D)
+        
+        # Compute attention scores: qₜᵀK̃ᶜᵐᵖₜ
         scores = torch.matmul(q, compressed_keys.transpose(-2, -1))  # (B, H, 1, N)
         scores = scores.squeeze(2)  # (B, H, N)
-        scores = scores / (self.config.head_dim ** 0.5)
+        scores = scores / (self.config.head_dim ** 0.5)  # Scale by √d
 
-        # Convert to probabilities
+        # Convert to probabilities: Softmax(qₜᵀK̃ᶜᵐᵖₜ)
         probs = F.softmax(scores, dim=-1)  # (B, H, N)
 
         if self.config.use_gqa and probs.size(-1) > 0:
@@ -43,17 +55,29 @@ class BlockwiseSelector(nn.Module):
         keys: torch.Tensor,              # (B, H, L, D)
         values: torch.Tensor             # (B, H, L, D)
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Select top-n blocks based on importance scores."""
+        """Select top-n blocks based on importance scores.
+        
+        Following the paper's formulation:
+        Iₜ = {i | rank(pˢˡᶜₜ[i]) ≤ n}
+        K̃ˢˡᶜₜ = Cat{k_{il'+1:(i+1)l'} | i ∈ Iₜ}
+        
+        Args:
+            importance_scores: Block importance scores (B, H, N)
+            keys: Input keys (B, H, L, D)
+            values: Input values (B, H, L, D)
+        Returns:
+            Selected keys and values (B, H, n*block_size, D)
+        """
         B = keys.size(0)
         block_size = self.config.selection_block_size
         n = self.config.num_selected_blocks
 
-        # Get top-n block indices
+        # Get indices of top-n blocks: Iₜ = {i | rank(pˢˡᶜₜ[i]) ≤ n}
         _, indices = torch.topk(
             importance_scores,
             k=min(n, importance_scores.size(-1)),
             dim=-1
-        )  # (B, G/H, n)
+        )  # (B, H, n)
         
         # Get shapes
         B, num_heads, _, D = keys.size()
