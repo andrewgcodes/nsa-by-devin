@@ -82,7 +82,10 @@ class BlockwiseSelector(nn.Module):
         # Get shapes
         B, num_heads, _, D = keys.size()
         
-        # Convert indices to block starts
+        # Convert indices to block starts, ensuring we don't exceed sequence length
+        seq_len = keys.size(2)
+        max_blocks = (seq_len - block_size + 1) // block_size
+        indices = torch.clamp(indices, 0, max_blocks - 1)
         block_starts = indices * block_size  # (B, H, n)
         
         # Create offsets for each position in block
@@ -93,6 +96,9 @@ class BlockwiseSelector(nn.Module):
             block_starts.unsqueeze(-1) +  # (B, H, n, 1)
             offsets.view(1, 1, 1, -1)     # (1, 1, 1, block_size)
         )  # (B, H, n, block_size)
+        
+        # Ensure indices don't exceed sequence length
+        gather_indices = torch.clamp(gather_indices, 0, seq_len - 1)
         
         # Expand indices for all feature dimensions
         gather_indices = gather_indices.unsqueeze(-1)  # (B, H, n, block_size, 1)

@@ -38,16 +38,21 @@ class NSATransformer(nn.Module):
         vocab_size: int,
         num_layers: int = 2,
         hidden_dim: int = 256,
-        num_heads: int = 4,
-        head_dim: int = 64
+        num_heads: int = 8,
+        head_dim: int = 32
     ):
         super().__init__()
         
-        # Create config
+        # Create config with model hyperparameters
         self.config = NSAConfig(
             hidden_dim=hidden_dim,
             num_heads=num_heads,
-            head_dim=head_dim
+            head_dim=head_dim,
+            compression_block_size=64,  # l in paper
+            compression_stride=32,      # d in paper
+            selection_block_size=64,    # l' in paper
+            window_size=256,           # w in paper
+            num_selected_blocks=8      # n in paper
         )
         
         # Layers

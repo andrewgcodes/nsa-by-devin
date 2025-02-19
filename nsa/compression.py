@@ -27,7 +27,7 @@ class TokenCompressor(nn.Module):
         # Learnable intra-block positional encoding
         # Initialize with small values for stable training
         self.pos_embedding = nn.Parameter(
-            torch.randn(1, config.compression_block_size, config.head_dim) / 
+            torch.randn(1, 1, config.compression_block_size, config.head_dim) / 
             (config.head_dim ** 0.5)
         )
 
@@ -54,8 +54,7 @@ class TokenCompressor(nn.Module):
             block = x[:, :, i:i+block_size, :]  # (B, H, l, D)
             
             # Add intra-block positional encoding
-            pos_emb = self.pos_embedding.view(1, 1, block_size, D)
-            block = block + pos_emb  # Position-aware representation
+            block = block + self.pos_embedding  # Position-aware representation
             blocks.append(block)
 
         if not blocks:
