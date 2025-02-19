@@ -2,6 +2,25 @@
 
 This repository contains a PyTorch implementation of NSA (Natively trainable Sparse Attention) mechanism, which integrates algorithmic innovations with hardware-aligned optimizations to achieve efficient long-context modeling.
 
+## Quick Start with Google Colab
+
+The fastest way to get started is using our Google Colab notebook:
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/andrewgcodes/nsa-by-devin/blob/main/NSA_Shakespeare.ipynb)
+
+The notebook includes:
+- Complete setup and installation
+- Shakespeare text generation example
+- Training visualization
+- Interactive text generation
+
+### Running in Colab
+
+1. Click the "Open in Colab" button above
+2. Runtime > Change runtime type > Select GPU
+3. Run all cells (Runtime > Run all)
+4. Follow the interactive examples
+
 ## Mathematical Formulations
 
 NSA employs a hierarchical sparse strategy that divides the attention computation into three parallel branches:
